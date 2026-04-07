@@ -581,7 +581,11 @@
             <div class="logo">
                 📚 Documentation Knowledge Base
             </div>
-            <div style="display: flex; gap: 10px;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 12px; background: rgba(255,255,255,0.1); border-radius: 6px; transition: all 0.3s;">
+                    <input type="checkbox" id="editModeToggle" onchange="toggleEditMode()" style="cursor: pointer; width: 16px; height: 16px;">
+                    <span style="color: white; font-size: 14px; font-weight: 500;">✏️ Enable Edit Mode</span>
+                </label>
                 <button class="menu-btn" onclick="openAddEntryModal()">
                     ➕ Add Entry
                 </button>
@@ -803,6 +807,32 @@
         </div>
     </div>
 
+    <!-- View Entry Modal -->
+    <div class="modal" id="viewEntryModal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h2 class="modal-title">View Entry</h2>
+                <button class="close-btn" onclick="closeModal('viewEntryModal')">×</button>
+            </div>
+            <div class="modal-body" id="viewEntryContent">
+                <!-- Content will be dynamically inserted -->
+            </div>
+        </div>
+    </div>
+
+    <!-- View Document Modal -->
+    <div class="modal" id="viewDocumentModal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h2 class="modal-title">View Document</h2>
+                <button class="close-btn" onclick="closeModal('viewDocumentModal')">×</button>
+            </div>
+            <div class="modal-body" id="viewDocumentContent">
+                <!-- Content will be dynamically inserted -->
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div class="toast" id="toast"></div>
 
@@ -821,6 +851,7 @@
         let searchHistory = [];
         let currentFileContent = '';
         let currentLinks = []; // Temporary storage for links being added
+        let editModeEnabled = false; // Edit mode toggle state
 
         // Load data from localStorage
         function loadData() {
@@ -1486,19 +1517,34 @@
                     </a>
                 `).join('');
 
-                // Show related entries/documents
-                const relatedItems = results.slice(1, 4);
-                document.getElementById('relatedDocs').innerHTML = relatedItems.map(r => {
+                // Show related entries/documents - filter duplicates
+                const relatedItems = results.slice(1, 10);
+                const seenDocs = new Set();
+                const seenEntries = new Set([entry.id]);
+                const uniqueRelated = [];
+                
+                for (const r of relatedItems) {
+                    if (r.type === 'entry' && !seenEntries.has(r.entry.id)) {
+                        seenEntries.add(r.entry.id);
+                        uniqueRelated.push(r);
+                    } else if (r.type === 'document' && !seenDocs.has(r.doc.id)) {
+                        seenDocs.add(r.doc.id);
+                        uniqueRelated.push(r);
+                    }
+                    if (uniqueRelated.length >= 3) break;
+                }
+
+                document.getElementById('relatedDocs').innerHTML = uniqueRelated.map(r => {
                     if (r.type === 'entry') {
                         return `
-                            <div class="related-card" onclick="viewEntry(${r.entry.id})">
+                            <div class="related-card" onclick="viewEntry(${r.entry.id})" style="cursor: pointer;">
                                 <div class="related-card-title">${r.entry.question}</div>
                                 <div class="related-card-category">${getCategoryName(r.entry.category)}</div>
                             </div>
                         `;
                     } else {
                         return `
-                            <div class="related-card" onclick="viewDocument(${r.doc.id})">
+                            <div class="related-card" onclick="viewDocument(${r.doc.id})" style="cursor: pointer;">
                                 <div class="related-card-title">${r.doc.title}</div>
                                 <div class="related-card-category">${getCategoryName(r.doc.category)}</div>
                             </div>
@@ -1519,23 +1565,39 @@
                 document.getElementById('answerContent').innerHTML = highlightKeywords(answer, extractKeywords(query));
 
                 document.getElementById('sourceLink').innerHTML = `
-                    <div class="source-link" onclick="viewDocument(${doc.id})">
+                    <div class="source-link" onclick="viewDocument(${doc.id})" style="cursor: pointer;">
                         📄 ${doc.title} → ${section.title}
                     </div>
                 `;
 
-                const relatedItems = results.slice(1, 4);
-                document.getElementById('relatedDocs').innerHTML = relatedItems.map(r => {
+                // Filter out duplicate documents from related items
+                const relatedItems = results.slice(1, 10);
+                const seenDocs = new Set([doc.id]);
+                const seenEntries = new Set();
+                const uniqueRelated = [];
+                
+                for (const r of relatedItems) {
+                    if (r.type === 'entry' && !seenEntries.has(r.entry.id)) {
+                        seenEntries.add(r.entry.id);
+                        uniqueRelated.push(r);
+                    } else if (r.type === 'document' && !seenDocs.has(r.doc.id)) {
+                        seenDocs.add(r.doc.id);
+                        uniqueRelated.push(r);
+                    }
+                    if (uniqueRelated.length >= 3) break;
+                }
+
+                document.getElementById('relatedDocs').innerHTML = uniqueRelated.map(r => {
                     if (r.type === 'entry') {
                         return `
-                            <div class="related-card" onclick="viewEntry(${r.entry.id})">
+                            <div class="related-card" onclick="viewEntry(${r.entry.id})" style="cursor: pointer;">
                                 <div class="related-card-title">${r.entry.question}</div>
                                 <div class="related-card-category">${getCategoryName(r.entry.category)}</div>
                             </div>
                         `;
                     } else {
                         return `
-                            <div class="related-card" onclick="viewDocument(${r.doc.id})">
+                            <div class="related-card" onclick="viewDocument(${r.doc.id})" style="cursor: pointer;">
                                 <div class="related-card-title">${r.doc.title}</div>
                                 <div class="related-card-category">${getCategoryName(r.doc.category)}</div>
                             </div>
@@ -1598,6 +1660,12 @@
             document.getElementById('answerPanel').classList.add('active');
         }
 
+        // Toggle edit mode
+        function toggleEditMode() {
+            editModeEnabled = document.getElementById('editModeToggle').checked;
+            renderKnowledgeCards();
+        }
+
         // Render knowledge cards
         function renderKnowledgeCards() {
             const grid = document.getElementById('knowledgeGrid');
@@ -1622,13 +1690,17 @@
             allItems.sort((a, b) => (b.views || 0) - (a.views || 0));
 
             grid.innerHTML = allItems.map(item => {
+                const editButtons = editModeEnabled ? `
+                    <div style="position: absolute; top: 10px; right: 10px; display: flex; gap: 5px; z-index: 10;">
+                        <button onclick="event.stopPropagation(); ${item.itemType === 'entry' ? 'editEntry' : 'editDocument'}(${item.id})" style="padding: 4px 8px; background: var(--primary-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">✏️ Edit</button>
+                        <button onclick="event.stopPropagation(); ${item.itemType === 'entry' ? 'deleteEntry' : 'deleteDocument'}(${item.id})" style="padding: 4px 8px; background: var(--danger-red); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">🗑️ Delete</button>
+                    </div>
+                ` : '';
+
                 if (item.itemType === 'entry') {
                     return `
                         <div class="knowledge-card" style="position: relative;">
-                            <div style="position: absolute; top: 10px; right: 10px; display: flex; gap: 5px; z-index: 10;">
-                                <button onclick="event.stopPropagation(); editEntry(${item.id})" style="padding: 4px 8px; background: var(--primary-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">✏️ Edit</button>
-                                <button onclick="event.stopPropagation(); deleteEntry(${item.id})" style="padding: 4px 8px; background: var(--danger-red); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">🗑️ Delete</button>
-                            </div>
+                            ${editButtons}
                             <div onclick="viewEntry(${item.id})" style="cursor: pointer;">
                                 <div class="card-category">${getCategoryName(item.category)}</div>
                                 <div class="card-title">${item.question}</div>
@@ -1643,10 +1715,7 @@
                 } else {
                     return `
                         <div class="knowledge-card" style="position: relative;">
-                            <div style="position: absolute; top: 10px; right: 10px; display: flex; gap: 5px; z-index: 10;">
-                                <button onclick="event.stopPropagation(); editDocument(${item.id})" style="padding: 4px 8px; background: var(--primary-blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">✏️ Edit</button>
-                                <button onclick="event.stopPropagation(); deleteDocument(${item.id})" style="padding: 4px 8px; background: var(--danger-red); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">🗑️ Delete</button>
-                            </div>
+                            ${editButtons}
                             <div onclick="viewDocument(${item.id})" style="cursor: pointer;">
                                 <div class="card-category">${getCategoryName(item.category)}</div>
                                 <div class="card-title">${item.title}</div>
@@ -1671,12 +1740,56 @@
             saveData();
 
             const linksHtml = entry.links.map(link => `
-                <a href="${link.url}" target="_blank" style="display: block; color: var(--primary-blue); text-decoration: none; margin-bottom: 5px;">
+                <a href="${link.url}" target="_blank" style="display: block; color: var(--primary-blue); text-decoration: none; margin-bottom: 10px; padding: 8px; background: #f5f5f5; border-radius: 4px;">
                     🔗 ${link.title}
                 </a>
             `).join('');
 
-            alert(`Question: ${entry.question}\n\nAnswer: ${entry.answer}\n\nCategory: ${getCategoryName(entry.category)}\nTags: ${entry.tags.join(', ')}\nViews: ${entry.views}\n\nDocumentation Links:\n${entry.links.map(l => `${l.title}: ${l.url}`).join('\n')}`);
+            const tagsHtml = entry.tags.map(tag => `<span style="display: inline-block; background: var(--primary-blue); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 5px;">${tag}</span>`).join('');
+
+            const editButtons = editModeEnabled ? `
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="closeModal('viewEntryModal'); editEntry(${entry.id})" style="padding: 8px 16px; background: var(--primary-blue); color: white; border: none; border-radius: 4px; cursor: pointer;">✏️ Edit</button>
+                    <button onclick="if(confirm('Delete this entry?')) { deleteEntry(${entry.id}); closeModal('viewEntryModal'); }" style="padding: 8px 16px; background: var(--danger-red); color: white; border: none; border-radius: 4px; cursor: pointer;">🗑️ Delete</button>
+                </div>
+            ` : '';
+
+            const modalContent = `
+                <div style="max-width: 800px; margin: 0 auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 20px;">
+                        <div style="flex: 1;">
+                            <div style="color: var(--primary-blue); font-size: 14px; margin-bottom: 5px;">${getCategoryName(entry.category)}</div>
+                            <h2 style="margin: 0; font-size: 24px;">${entry.question}</h2>
+                        </div>
+                        ${editButtons}
+                    </div>
+                    
+                    <div style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                        <h3 style="margin-top: 0;">Answer:</h3>
+                        <p style="line-height: 1.6; white-space: pre-wrap;">${entry.answer}</p>
+                    </div>
+
+                    ${entry.links.length > 0 ? `
+                        <div style="margin-bottom: 20px;">
+                            <h3>Documentation Links:</h3>
+                            ${linksHtml}
+                        </div>
+                    ` : ''}
+
+                    <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+                        <div>
+                            <strong>Tags:</strong><br>
+                            ${tagsHtml || '<span style="color: #999;">No tags</span>'}
+                        </div>
+                        <div>
+                            <strong>Views:</strong> ${entry.views}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('viewEntryContent').innerHTML = modalContent;
+            document.getElementById('viewEntryModal').classList.add('active');
         }
 
         // View document
@@ -1687,7 +1800,60 @@
             doc.views++;
             saveData();
 
-            alert(`Document: ${doc.title}\n\nCategory: ${getCategoryName(doc.category)}\nSections: ${doc.sections.length}\nViews: ${doc.views}\n\nContent preview:\n${doc.content.substring(0, 300)}...`);
+            const tagsHtml = doc.tags.map(tag => `<span style="display: inline-block; background: var(--primary-blue); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 5px;">${tag}</span>`).join('');
+
+            const sectionsHtml = doc.sections.map((section, idx) => `
+                <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <h4 style="margin-top: 0; color: var(--primary-blue);">${section.title}</h4>
+                    <p style="line-height: 1.6; white-space: pre-wrap;">${section.content.substring(0, 500)}${section.content.length > 500 ? '...' : ''}</p>
+                </div>
+            `).join('');
+
+            const editButtons = editModeEnabled ? `
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="closeModal('viewDocumentModal'); editDocument(${doc.id})" style="padding: 8px 16px; background: var(--primary-blue); color: white; border: none; border-radius: 4px; cursor: pointer;">✏️ Edit</button>
+                    <button onclick="if(confirm('Delete this document?')) { deleteDocument(${doc.id}); closeModal('viewDocumentModal'); }" style="padding: 8px 16px; background: var(--danger-red); color: white; border: none; border-radius: 4px; cursor: pointer;">🗑️ Delete</button>
+                </div>
+            ` : '';
+
+            const modalContent = `
+                <div style="max-width: 800px; margin: 0 auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 20px;">
+                        <div style="flex: 1;">
+                            <div style="color: var(--primary-blue); font-size: 14px; margin-bottom: 5px;">${getCategoryName(doc.category)}</div>
+                            <h2 style="margin: 0; font-size: 24px;">${doc.title}</h2>
+                        </div>
+                        ${editButtons}
+                    </div>
+
+                    ${doc.sourceUrl ? `
+                        <div style="margin-bottom: 20px;">
+                            <a href="${doc.sourceUrl}" target="_blank" style="display: inline-block; color: var(--primary-blue); text-decoration: none; padding: 8px 16px; background: #f5f5f5; border-radius: 4px;">
+                                🔗 View Original Source
+                            </a>
+                        </div>
+                    ` : ''}
+
+                    <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+                        <div>
+                            <strong>Tags:</strong><br>
+                            ${tagsHtml || '<span style="color: #999;">No tags</span>'}
+                        </div>
+                        <div>
+                            <strong>Sections:</strong> ${doc.sections.length}
+                        </div>
+                        <div>
+                            <strong>Views:</strong> ${doc.views}
+                        </div>
+                    </div>
+
+                    <h3>Content Sections:</h3>
+                    ${sectionsHtml}
+                </div>
+            `;
+
+            document.getElementById('viewDocumentContent').innerHTML = modalContent;
+            document.getElementById('viewDocumentModal').classList.add('active');
         }
 
         // Get category name
